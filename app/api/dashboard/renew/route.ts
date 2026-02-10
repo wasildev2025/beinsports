@@ -10,7 +10,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const cookieHeader = `session=${session}; uid=${uid}; access=${cookieStore.get('access')?.value}; token=${cookieStore.get('token')?.value}`;
+    const csrf = cookieStore.get('_csrf')?.value;
+    const xsrf = cookieStore.get('XSRF-TOKEN')?.value;
+
+    let cookieHeader = `session=${session}; uid=${uid}; access=${cookieStore.get('access')?.value}; token=${cookieStore.get('token')?.value}`;
+    if (csrf) cookieHeader += `; _csrf=${csrf}`;
+    if (xsrf) cookieHeader += `; XSRF-TOKEN=${xsrf}`;
 
     try {
         const body = await request.json();
@@ -28,7 +33,8 @@ export async function POST(request: Request) {
                 "Content-Type": "application/x-www-form-urlencoded",
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
                 "Referer": "https://bein.newhd.info/renew.php",
-                "Origin": "https://bein.newhd.info"
+                "Origin": "https://bein.newhd.info",
+                ...(xsrf ? { "X-XSRF-TOKEN": xsrf } : {})
             },
             body: new URLSearchParams(body).toString(),
             signal: controller.signal

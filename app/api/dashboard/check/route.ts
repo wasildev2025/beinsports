@@ -12,7 +12,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Missing session cookies" }, { status: 401 });
     }
 
+    const csrf = cookieStore.get('_csrf')?.value;
+    const xsrf = cookieStore.get('XSRF-TOKEN')?.value;
+
     const cookieHeader = `session=${session}; uid=${uid}; access=${access}; token=${token}`;
+    const fullCookieHeader = csrf ? `${cookieHeader}; _csrf=${csrf}` : cookieHeader;
+    const finalCookieHeader = xsrf ? `${fullCookieHeader}; XSRF-TOKEN=${xsrf}` : fullCookieHeader;
 
     try {
         const body = await request.json();
@@ -36,7 +41,8 @@ export async function POST(request: Request) {
                 "Content-Type": "application/x-www-form-urlencoded",
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
                 "Referer": "https://bein.newhd.info/check.php", // Assumed referer
-                "Origin": "https://bein.newhd.info"
+                "Origin": "https://bein.newhd.info",
+                ...(xsrf ? { "X-XSRF-TOKEN": xsrf } : {})
             },
             body: `serial=${serial}`, // Adjust body param name if needed
             signal: controller.signal

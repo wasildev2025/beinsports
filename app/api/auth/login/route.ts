@@ -2,14 +2,64 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
     try {
-        const body = await request.json();
-        const { email, password } = body;
+        let body: FormData | null = null;
+        let manualData: any = null;
+
+        // Try to parse as FormData first
+        try {
+            // Use request.clone() to allow reading the body multiple times if needed
+            body = await request.clone().formData();
+        } catch (e) {
+            // If formData parsing fails, it might be JSON
+        }
+
+        // Check if JSON (manual auth)
+        if (!body || body.get('username') === null) {
+            const jsonBody = await request.json().catch(() => null);
+            if (jsonBody && jsonBody.manual) {
+                manualData = jsonBody;
+            }
+        }
+
+        if (manualData) {
+            const { session, uid, access, token, _csrf, 'XSRF-TOKEN': xsrf } = manualData;
+
+            const response = NextResponse.json({
+                success: true,
+                message: "Manual login successful",
+                user: {
+                    name: "Reseller",
+                    email: "manual@example.com",
+                    role: "Reseller"
+                }
+            });
+
+            if (session) response.cookies.set('session', session, { httpOnly: true, path: '/' });
+            if (uid) response.cookies.set('uid', uid, { httpOnly: true, path: '/' });
+            if (access) response.cookies.set('access', access, { httpOnly: true, path: '/' });
+            if (token) response.cookies.set('token', token, { httpOnly: true, path: '/' });
+            if (_csrf) response.cookies.set('_csrf', _csrf, { httpOnly: true, path: '/' });
+            if (xsrf) response.cookies.set('XSRF-TOKEN', xsrf, { httpOnly: true, path: '/' });
+
+            return response;
+        }
+
+        // If not manual data, proceed with form data login
+        if (!body) {
+            return NextResponse.json({ success: false, message: "Invalid request body" }, { status: 400 });
+        }
+
+        const username = body.get('username');
+        const password = body.get('password');
+
+        if (!username || !password) {
+            return NextResponse.json({ success: false, message: "Missing username or password" }, { status: 400 });
+        }
 
         // 1. Prepare form data for NewHD
-        // Verified field names via curl: username, password, login
         const formData = new URLSearchParams();
-        formData.append('username', email);
-        formData.append('password', password);
+        if (username) formData.append('username', username.toString());
+        if (password) formData.append('password', password.toString());
         formData.append('login', 'Login');
 
         const loginRes = await fetch("https://bein.newhd.info/Activation/login.php", {
@@ -24,43 +74,31 @@ export async function POST(request: Request) {
             redirect: "manual"
         });
 
-        // Extract cookies
         const setCookieHeader = loginRes.headers.get("set-cookie");
-        console.log("Login Response Status:", loginRes.status);
-        console.log("Set-Cookie:", setCookieHeader);
-
         if (!setCookieHeader) {
-            // Even if failed, we might want to check the body or status.
-            // But typically a successful login sets a session cookie.
-            // If status is 200 and no cookie, it's failed.
             return NextResponse.json({ success: false, message: "Login failed - No session cookie received from upstream" }, { status: 401 });
         }
 
-        // Parse cookies
-        // The upstream sets multiple cookies. We need to forward them.
-        // Simplified parsing:
-        const cookies = setCookieHeader.split(',').map(c => c.split(';')[0]).join('; ');
+        // Simplified parsing: merge all cookies into one session cookie for now
+        // But better to parse them to support the specific cookies expected by stats
+        // We will store the raw `setCookieHeader` if manageable, or join them.
+        // Actually, the previous implementation stored them all in 'session'.
+        // Let's stick to that but also try to extract uid/access/token if present.
 
-        // We also need to extract specific cookies if possible to match what the stats API needs (uid, access, token).
-        // However, `set-cookie` header merging in node-fetch/Next.js might make this tricky if they are comma-separated.
-        // Let's assume `cookies` string captures the necessary parts for now.
+        const cookies = setCookieHeader.split(',').map(c => c.split(';')[0]).join('; ');
 
         const response = NextResponse.json({
             success: true,
             user: {
                 name: "Reseller",
-                email: email,
+                email: username ? username.toString() : "",
                 role: "Reseller"
             }
         });
 
-        // Set the session cookie for our domain
         response.cookies.set('session', cookies, { httpOnly: true, path: '/' });
 
-        // Also try to parse out uid/token/access if they exist in the string to set them individually for the stats route
-        // The stats route expects: session, uid, access, token
-        // We can try to regex them out of `setCookieHeader`
-
+        // Try regex extraction for specific items
         const uidMatch = setCookieHeader.match(/uid=([^;]+)/);
         if (uidMatch) response.cookies.set('uid', uidMatch[1], { httpOnly: true, path: '/' });
 
@@ -72,8 +110,8 @@ export async function POST(request: Request) {
 
         return response;
 
-
     } catch (e) {
+        console.error("Login Error:", e);
         return NextResponse.json({ success: false, message: "Error" }, { status: 500 });
     }
 }

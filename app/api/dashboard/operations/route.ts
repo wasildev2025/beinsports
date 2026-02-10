@@ -31,7 +31,12 @@ export async function GET() {
         const uid = cookieStore.get('uid')?.value;
 
         if (session && uid) {
-            const cookieHeader = `session=${session}; uid=${uid}; access=${cookieStore.get('access')?.value}; token=${cookieStore.get('token')?.value}`;
+            const csrf = cookieStore.get('_csrf')?.value;
+            const xsrf = cookieStore.get('XSRF-TOKEN')?.value;
+
+            let cookieHeader = `session=${session}; uid=${uid}; access=${cookieStore.get('access')?.value}; token=${cookieStore.get('token')?.value}`;
+            if (csrf) cookieHeader += `; _csrf=${csrf}`;
+            if (xsrf) cookieHeader += `; XSRF-TOKEN=${xsrf}`;
 
             try {
                 // Placeholder endpoint - likely Activation/json/get_operations or similar
@@ -44,7 +49,8 @@ export async function GET() {
                         "X-Requested-With": "XMLHttpRequest",
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
                         "Referer": "https://bein.newhd.info/history.php",
-                        "Origin": "https://bein.newhd.info"
+                        "Origin": "https://bein.newhd.info",
+                        ...(xsrf ? { "X-XSRF-TOKEN": xsrf } : {})
                     },
                     body: "id=1" // Dummy body
                 });

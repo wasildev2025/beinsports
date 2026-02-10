@@ -8,17 +8,22 @@ export async function GET() {
     const access = cookieStore.get('access')?.value;
     const token = cookieStore.get('token')?.value;
 
+    const csrf = cookieStore.get('_csrf')?.value;
+    const xsrf = cookieStore.get('XSRF-TOKEN')?.value;
+
     if (!session || !uid) {
         return NextResponse.json({ error: "Missing session cookies" }, { status: 401 });
     }
 
-    const cookieHeader = `session=${session}; uid=${uid}; access=${access}; token=${token}`;
+    let cookieHeader = `session=${session}; uid=${uid}; access=${access}; token=${token}`;
+    if (csrf) cookieHeader += `; _csrf=${csrf}`;
+    if (xsrf) cookieHeader += `; XSRF-TOKEN=${xsrf}`;
 
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-        const headers = {
+        const headers: Record<string, string> = {
             "Cookie": cookieHeader,
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
             "X-Requested-With": "XMLHttpRequest",
@@ -26,6 +31,10 @@ export async function GET() {
             "Referer": "https://bein.newhd.info/home.php",
             "Origin": "https://bein.newhd.info"
         };
+
+        if (xsrf) {
+            headers["X-XSRF-TOKEN"] = xsrf;
+        }
 
         // 1. Fetch User Data (Balance, etc.)
         const userRes = await fetch("https://bein.newhd.info/Activation/json/get_user", {
