@@ -174,10 +174,10 @@ export default function DashboardLayout({
                     </div>
 
                     <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2 text-gray-600 cursor-pointer hover:text-[#9368E9] transition-colors">
+                        <Link href="/dashboard/settings" className="flex items-center space-x-2 text-gray-600 cursor-pointer hover:text-[#9368E9] transition-colors">
                             <Settings size={18} />
                             <span className="text-sm font-medium hidden sm:block">Settings</span>
-                        </div>
+                        </Link>
                         <div className="h-6 w-px bg-gray-300 mx-2"></div>
                         <button className="flex items-center space-x-1 text-red-500 hover:text-red-700 transition-colors text-sm font-medium">
                             <LogOut size={16} />

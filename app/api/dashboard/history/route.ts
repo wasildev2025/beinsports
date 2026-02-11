@@ -22,18 +22,18 @@ export async function GET() {
             "Cookie": cookieHeader,
             "X-Requested-With": "XMLHttpRequest",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Referer": "https://bein.newhd.info/Activation/Sous-Resseler/Sold_orders",
+            "Referer": "https://bein.newhd.info/Activation/Sous-Resseler/History",
             "Origin": "https://bein.newhd.info",
         };
         if (xsrf) headers["X-XSRF-TOKEN"] = xsrf;
 
-        const res = await fetch("https://bein.newhd.info/Activation/Sous-Resseler/get_tokens_list", {
+        const res = await fetch("https://bein.newhd.info/Activation/Sous-Resseler/get_connection_history", {
             method: "GET",
             headers,
         });
 
         if (!res.ok) {
-            console.warn("Upstream sold orders returned:", res.status);
+            console.warn("Upstream connection history returned:", res.status);
             return NextResponse.json([]);
         }
 
@@ -41,7 +41,7 @@ export async function GET() {
         return NextResponse.json(Array.isArray(data) ? data : []);
 
     } catch (error) {
-        console.error("Sold Orders API Error:", error);
+        console.error("History API Error:", error);
         return NextResponse.json([], { status: 500 });
     }
 }

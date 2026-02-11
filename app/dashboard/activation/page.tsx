@@ -1,137 +1,209 @@
 "use client";
 
-import { useState } from 'react';
-import { RefreshCw, CreditCard, AlertCircle, CheckCircle } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { Key, Loader2, AlertCircle, CheckCircle, Send } from "lucide-react";
 
-export default function RenewPage() {
-    const [serial, setSerial] = useState('');
-    const [period, setPeriod] = useState('1'); // Default 1 month? confirm packages
-    const [loading, setLoading] = useState(false);
-    const [result, setResult] = useState<any>(null);
-    const [error, setError] = useState('');
+interface ActiveCode {
+    id_app?: string | number;
+    code: string;
+    type: string;
+    created_date: string;
+}
 
-    const handleRenew = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!confirm('Are you sure you want to renew this subscription?')) return;
+export default function ActivationCodePage() {
+    const [codes, setCodes] = useState<ActiveCode[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [code, setCode] = useState("");
+    const [submitting, setSubmitting] = useState(false);
+    const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
+    const fetchCodes = () => {
         setLoading(true);
-        setError('');
-        setResult(null);
+        fetch("/api/dashboard/activation")
+            .then((res) => res.json())
+            .then((data) => setCodes(data))
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(() => {
+        fetchCodes();
+    }, []);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!confirm("Do you want to submit?")) return;
+
+        setSubmitting(true);
+        setMessage(null);
 
         try {
-            const res = await fetch('/api/dashboard/renew', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ serial, period })
+            const res = await fetch("/api/dashboard/activation", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ code }),
             });
             const data = await res.json();
 
-            if (!res.ok) throw new Error(data.error || 'Renewal failed');
-            setResult(data);
-        } catch (err: any) {
-            setError(err.message);
+            if (!res.ok) {
+                setMessage({ text: data.error || "Activation failed", type: "error" });
+            } else {
+                setMessage({ text: data.message || "Code activated successfully!", type: "success" });
+                setCode("");
+                fetchCodes(); // Refresh list
+            }
+        } catch {
+            setMessage({ text: "An error occurred", type: "error" });
         } finally {
-            setLoading(false);
+            setSubmitting(false);
         }
     };
 
     return (
-        <div className="max-w-2xl mx-auto space-y-6">
-            <h1 className="text-2xl font-bold text-gray-800">Renew Subscription</h1>
-            <p className="text-gray-600">Extend subscription via NewHD proxy.</p>
-
-            <form onSubmit={handleRenew} className="bg-white p-6 rounded-lg shadow space-y-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Smart Card Serial Number</label>
-                    <input
-                        type="text"
-                        value={serial}
-                        onChange={(e) => setSerial(e.target.value)}
-                        placeholder="Enter serial number..."
-                        className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                        required
-                    />
-                </div>
-
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Period (Months)</label>
-                    <select
-                        value={period}
-                        onChange={(e) => setPeriod(e.target.value)}
-                        className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                        <option value="1">1 Month</option>
-                        <option value="3">3 Months</option>
-                        <option value="6">6 Months</option>
-                        <option value="12">12 Months</option>
-                    </select>
-                </div>
-
-                <div className="bg-yellow-50 p-4 rounded-lg flex items-start space-x-2">
-                    <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
-                    <p className="text-sm text-yellow-700">
-                        Please verifying checking the card status in the "Check" page before renewing to ensure compatibility.
+        <div className="space-y-8 animate-fade-in">
+            {/* Activation Code Form */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-[#5e2d91] px-6 py-4">
+                    <h2 className="text-white text-lg font-semibold flex items-center gap-2">
+                        <Key className="w-5 h-5" />
+                        Activation Code
+                    </h2>
+                    <p className="text-purple-200 text-sm mt-1">
+                        Panneau de gestion des Activation Code
                     </p>
                 </div>
 
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-green-600 text-white font-medium py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center space-x-2"
-                >
-                    {loading ? (
-                        <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            <span>Processing Renewal...</span>
-                        </>
-                    ) : (
-                        <>
-                            <RefreshCw size={20} />
-                            <span>Confirm Renewal</span>
-                        </>
+                <div className="p-6">
+                    {message && (
+                        <div
+                            className={`mb-6 p-4 rounded-lg flex items-center gap-3 text-sm ${message.type === "success"
+                                    ? "bg-green-50 text-green-700 border border-green-100"
+                                    : "bg-red-50 text-red-600 border border-red-100"
+                                }`}
+                        >
+                            {message.type === "success" ? (
+                                <CheckCircle className="w-5 h-5 flex-shrink-0" />
+                            ) : (
+                                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                            )}
+                            {message.text}
+                        </div>
                     )}
-                </button>
-            </form>
 
-            {error && (
-                <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center space-x-2 border border-red-100">
-                    <XCircle className="flex-shrink-0" size={20} />
-                    <span>{error}</span>
-                </div>
-            )}
+                    <h6 className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-4 border-b pb-2">
+                        Informations sur les Activation Code
+                    </h6>
 
-            {result && (
-                <div className="bg-white p-6 rounded-lg shadow border border-green-100">
-                    <div className="flex items-center space-x-2 text-green-600 mb-2">
-                        <CheckCircle size={24} />
-                        <h3 className="text-lg font-semibold">Renewal Successful</h3>
-                    </div>
-                    <div className="bg-gray-50 p-4 rounded border text-sm font-mono overflow-auto">
-                        {result.raw || JSON.stringify(result, null, 2)}
+                    <form onSubmit={handleSubmit} className="max-w-xl mx-auto">
+                        <div className="mb-6">
+                            <label
+                                htmlFor="activation-code"
+                                className="block text-gray-700 font-medium mb-2 flex items-center gap-2"
+                            >
+                                <Key className="w-5 h-5 text-gray-400" />
+                                Code
+                            </label>
+                            <input
+                                id="activation-code"
+                                type="text"
+                                maxLength={16}
+                                minLength={16}
+                                value={code}
+                                onChange={(e) => setCode(e.target.value)}
+                                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all outline-none text-lg font-mono tracking-wider"
+                                placeholder="Enter 16-character code"
+                                required
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className="flex justify-center">
+                            <button
+                                type="submit"
+                                disabled={submitting || code.length !== 16}
+                                className="bg-[#5e2d91] hover:bg-[#4a2373] text-white px-8 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                            >
+                                {submitting ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        Activating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Send className="w-5 h-5" />
+                                        Activation Code
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {/* Code Active List */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-[#5e2d91] px-6 py-4">
+                    <h2 className="text-white text-lg font-semibold flex items-center gap-2">
+                        <Key className="w-5 h-5" />
+                        Code Active List
+                    </h2>
+                    <p className="text-purple-200 text-sm mt-1">
+                        Liste de gestion des Code Active List
+                    </p>
+                </div>
+
+                <div className="p-4">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b">
+                                <tr>
+                                    <th className="px-6 py-3">ID App</th>
+                                    <th className="px-6 py-3">Code</th>
+                                    <th className="px-6 py-3">Type</th>
+                                    <th className="px-6 py-3">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={4} className="px-6 py-8 text-center">
+                                            <Loader2 className="w-6 h-6 animate-spin text-[#9368E9] mx-auto" />
+                                        </td>
+                                    </tr>
+                                ) : codes.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
+                                            No active codes found
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    codes.map((item, index) => (
+                                        <tr
+                                            key={index}
+                                            className="bg-white border-b hover:bg-gray-50 transition-colors even:bg-gray-50/50"
+                                        >
+                                            <td className="px-6 py-3 font-medium text-gray-900">
+                                                {item.id_app ?? "—"}
+                                            </td>
+                                            <td className="px-6 py-3 font-mono text-gray-700">
+                                                {item.code}
+                                            </td>
+                                            <td className="px-6 py-3">
+                                                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                                                    {item.type}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-3 text-gray-500">
+                                                {item.created_date}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-            )}
+            </div>
         </div>
     );
-}
-
-function XCircle({ className, size }: { className?: string, size?: number }) {
-    return (
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width={size}
-            height={size}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={className}
-        >
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="15" y1="9" x2="9" y2="15"></line>
-            <line x1="9" y1="9" x2="15" y2="15"></line>
-        </svg>
-    )
 }
