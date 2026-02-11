@@ -8,6 +8,31 @@ interface SBSCookies {
     ticket: string;
 }
 
+interface Contract {
+    id: string;
+    type: string;
+    status: string;
+    package: string;
+    startDate: string;
+    endDate: string;
+    invoice: string;
+}
+
+interface CheckCardResult {
+    success: boolean;
+    card: {
+        serial: string;
+        stb: string;
+        valid: boolean;
+        expiry: string;
+        wallet_balance: string;
+        premium: boolean;
+    };
+    contracts: Contract[];
+    raw_html?: string;
+    error?: string;
+}
+
 export class SBSClient {
     private cookies: string;
 
@@ -31,10 +56,7 @@ export class SBSClient {
             const html = await res.text();
             const $ = cheerio.load(html);
 
-            // Scrape Balance/Stats - *Selectors need to be adjusted based on real HTML inspection*
-            // Assuming typical ID structures or text search
             const dealerName = $("#ctl00_lblDealerName").text().trim() || "Unknown Dealer";
-            // Example selector - would need real inspection to be precise
             const balance = $("#ctl00_ContentPlaceHolder1_lblBalance").text().trim() || "0.00 $";
 
             return {
@@ -47,7 +69,7 @@ export class SBSClient {
         }
     }
 
-    async checkCard(serial: string) {
+    async checkCard(serial: string): Promise<CheckCardResult> {
         try {
             // 1. GET the page first to extract ViewState
             const getRes = await fetch(`${SBS_BASE_URL}/frmCheck.aspx`, {
@@ -60,40 +82,136 @@ export class SBSClient {
             const viewStateGenerator = $get('#__VIEWSTATEGENERATOR').val() as string;
             const eventValidation = $get('#__EVENTVALIDATION').val() as string;
 
-            // 2. POST the check request
-            const params = new URLSearchParams();
-            params.append('__VIEWSTATE', viewState);
-            params.append('__VIEWSTATEGENERATOR', viewStateGenerator);
-            if (eventValidation) params.append('__EVENTVALIDATION', eventValidation);
+            if (!viewState) {
+                return {
+                    success: false,
+                    card: { serial, stb: '', valid: false, expiry: '', wallet_balance: '0', premium: false },
+                    contracts: [],
+                    error: 'Session expired or invalid. Could not get ViewState from SBS.'
+                };
+            }
 
-            // From inspection, the input ID is likely ctl00$ContentPlaceHolder1$tbSerial
-            // and the button is ctl00$ContentPlaceHolder1$btnCheck
-            params.append('ctl00$ContentPlaceHolder1$tbSerial', serial);
-            params.append('ctl00$ContentPlaceHolder1$btnCheck', 'Check'); // Or whatever the button value/name is
+            // 2. POST the check request
+            const formParams = new URLSearchParams();
+            formParams.append('__VIEWSTATE', viewState);
+            formParams.append('__VIEWSTATEGENERATOR', viewStateGenerator);
+            if (eventValidation) formParams.append('__EVENTVALIDATION', eventValidation);
+            formParams.append('ctl00$ContentPlaceHolder1$tbSerial', serial);
+            formParams.append('ctl00$ContentPlaceHolder1$btnCheck', 'Check');
 
             const postRes = await fetch(`${SBS_BASE_URL}/frmCheck.aspx`, {
                 method: "POST",
                 headers: this.getHeaders(),
-                body: params
+                body: formParams
             });
 
             const postHtml = await postRes.text();
-            const $post = cheerio.load(postHtml);
+            const $ = cheerio.load(postHtml);
 
-            // Extract Result
-            // Look for a result label or table
-            const resultText = $post('#ctl00_ContentPlaceHolder1_lblResult').text().trim()
-                || $post('.result-class').text().trim() // Fallback class
-                || "No result found (Check selectors)";
+            // 3. Parse the result HTML
+
+            // Serial & STB info
+            const serialText = $('#ctl00_ContentPlaceHolder1_lblSerial').text().trim()
+                || $('#ContentPlaceHolder1_lblSerial').text().trim();
+            const serialMatch = serialText.match(/Smart Card Serial:\s*(\d+)/);
+            const stbMatch = serialText.match(/Is paired to STB\(s\):\s*([\d,\s]+)/);
+
+            // Expiry info
+            const expiryText = $('#ctl00_ContentPlaceHolder1_lblCardMsg').text().trim()
+                || $('#ContentPlaceHolder1_lblCardMsg').text().trim();
+            const expiryMatch = expiryText.match(/Expired on\s*(\d{2}\/\d{2}\/\d{4})/);
+            const valid = expiryText.toLowerCase().includes('still valid');
+
+            // Wallet balance
+            const walletText = $('#ctl00_ContentPlaceHolder1_lblVodbalance').text().trim()
+                || $('#ContentPlaceHolder1_lblVodbalance').text().trim();
+            const walletMatch = walletText.match(/balance\s*:\s*\$?([\d.]+)/);
+
+            // Premium status
+            const premium = $('#ctl00_ContentPlaceHolder1_PremiumFlag').length > 0
+                || $('#ContentPlaceHolder1_PremiumFlag').length > 0
+                || postHtml.includes('PremiumFlag');
+
+            // Contracts table
+            const contracts: Contract[] = [];
+            // Try multiple possible selectors for the contracts grid
+            const gridSelectors = [
+                '#ctl00_ContentPlaceHolder1_TabContainer1_TabPanel1_ctrlContracts_GridView1',
+                '#ContentPlaceHolder1_TabContainer1_TabPanel1_ctrlContracts_GridView1',
+                '.Grid'
+            ];
+
+            let gridFound = false;
+            for (const selector of gridSelectors) {
+                const rows = $(`${selector} tr`).not('.GridHeader').not(':first-child');
+                if (rows.length > 0) {
+                    gridFound = true;
+                    rows.each((_, el) => {
+                        const cols = $(el).find('td');
+                        if (cols.length >= 7) {
+                            const type = $(cols[1]).text().trim();
+                            const status = $(cols[2]).text().trim();
+                            const pkg = $(cols[3]).text().trim();
+                            const startDate = $(cols[4]).text().trim();
+                            const endDate = $(cols[5]).text().trim();
+                            const invoice = $(cols[6]).text().trim();
+
+                            if (type) {
+                                contracts.push({
+                                    id: invoice || String(Math.random()).slice(2, 10),
+                                    type,
+                                    status,
+                                    package: pkg,
+                                    startDate,
+                                    endDate,
+                                    invoice
+                                });
+                            }
+                        }
+                    });
+                    break;
+                }
+            }
+
+            // Check if we actually got results
+            const hasResults = serialMatch || expiryMatch || contracts.length > 0;
+
+            if (!hasResults) {
+                // Maybe the serial was invalid, check for error messages
+                const errorMsg = $('#ctl00_ContentPlaceHolder1_lblResult').text().trim()
+                    || $('#ContentPlaceHolder1_lblResult').text().trim()
+                    || $('#ctl00_ContentPlaceHolder1_lblCardMsg').text().trim();
+
+                return {
+                    success: false,
+                    card: { serial, stb: '', valid: false, expiry: '', wallet_balance: '0', premium: false },
+                    contracts: [],
+                    error: errorMsg || 'No results found for this serial number.',
+                    raw_html: postHtml.substring(0, 500)
+                };
+            }
 
             return {
-                result: resultText,
-                html_snippet: $post('#ctl00_ContentPlaceHolder1_pnlResult').html() // Return raw HTML of result panel if possible
+                success: true,
+                card: {
+                    serial: serialMatch ? serialMatch[1] : serial,
+                    stb: stbMatch ? stbMatch[1].trim() : "None",
+                    valid: valid,
+                    expiry: expiryMatch ? expiryMatch[1] : "Unknown",
+                    wallet_balance: walletMatch ? walletMatch[1] : "0",
+                    premium: premium
+                },
+                contracts
             };
 
         } catch (error) {
             console.error("SBS Check Error:", error);
-            throw error;
+            return {
+                success: false,
+                card: { serial, stb: '', valid: false, expiry: '', wallet_balance: '0', premium: false },
+                contracts: [],
+                error: `Failed to check card: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
         }
     }
 }

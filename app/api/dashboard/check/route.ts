@@ -1,24 +1,7 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { SBSClient } from '@/lib/sbs-client';
 
 export async function POST(request: Request) {
-    const cookieStore = await cookies();
-    const session = cookieStore.get('session')?.value;
-    const uid = cookieStore.get('uid')?.value;
-    const access = cookieStore.get('access')?.value;
-    const token = cookieStore.get('token')?.value;
-
-    if (!session || !uid) {
-        return NextResponse.json({ error: "Missing session cookies" }, { status: 401 });
-    }
-
-    const csrf = cookieStore.get('_csrf')?.value;
-    const xsrf = cookieStore.get('XSRF-TOKEN')?.value;
-
-    const cookieHeader = `session=${session}; uid=${uid}; access=${access}; token=${token}`;
-    const fullCookieHeader = csrf ? `${cookieHeader}; _csrf=${csrf}` : cookieHeader;
-    const finalCookieHeader = xsrf ? `${fullCookieHeader}; XSRF-TOKEN=${xsrf}` : fullCookieHeader;
-
     try {
         const body = await request.json();
         const { serial } = body;
@@ -27,42 +10,29 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Serial number required" }, { status: 400 });
         }
 
-        // TODO: confirm actual endpoint. Assuming /Activation/check.php or similar based on pattern
-        // It might be a form post to check.php or specific json endpoint
-        const targetUrl = "https://bein.newhd.info/Activation/check.php"; // Placeholder
+        // Get SBS dealer credentials from environment
+        const sessionId = process.env.SBS_SESSION_ID;
+        const authCookie = process.env.SBS_AUTH_COOKIE;
+        const ticket = process.env.SBS_TICKET;
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-        const res = await fetch(targetUrl, {
-            method: "POST",
-            headers: {
-                "Cookie": cookieHeader,
-                "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                "Referer": "https://bein.newhd.info/check.php", // Assumed referer
-                "Origin": "https://bein.newhd.info",
-                ...(xsrf ? { "X-XSRF-TOKEN": xsrf } : {})
-            },
-            body: `serial=${serial}`, // Adjust body param name if needed
-            signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        if (!res.ok) {
-            return NextResponse.json({ error: `Upstream error: ${res.status}` }, { status: res.status });
+        if (!sessionId || !authCookie || !ticket) {
+            return NextResponse.json({
+                error: "SBS credentials not configured. Set SBS_SESSION_ID, SBS_AUTH_COOKIE, SBS_TICKET in .env"
+            }, { status: 500 });
         }
 
-        const text = await res.text();
-        // parsing logic depends on response (JSON vs HTML)
-        // For now returning raw text or simple success to frontend
-        return NextResponse.json({ success: true, verified: true, raw: text.substring(0, 200) });
+        const sbs = new SBSClient({
+            sessionId,
+            authCookie,
+            ticket
+        });
+
+        const result = await sbs.checkCard(serial);
+
+        return NextResponse.json(result);
 
     } catch (error: any) {
-        console.error("Check Proxy Error:", error);
-        if (error.name === 'AbortError') {
-            return NextResponse.json({ error: "Request timed out" }, { status: 504 });
-        }
+        console.error("Check API Error:", error);
         return NextResponse.json({ error: "Failed to check card" }, { status: 500 });
     }
 }

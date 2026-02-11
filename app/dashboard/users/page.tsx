@@ -25,6 +25,7 @@ export default function UsersManagementPage() {
     // Form State
     const [newPassword, setNewPassword] = useState("");
     const [addAmount, setAddAmount] = useState<number>(0);
+    const [status, setStatus] = useState("1"); // 1 = Payed, 0 = Not Payed
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 

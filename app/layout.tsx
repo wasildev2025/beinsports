@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { Montserrat } from "next/font/google"; // Changed from Inter
+// import { Montserrat } from "next/font/google"; // Changed from Inter
 import "./globals.css";
 
-const montserrat = Montserrat({ subsets: ["latin"] }); // Changed from Inter
+// const montserrat = Montserrat({ subsets: ["latin"] }); // Changed from Inter
 
 export const metadata: Metadata = {
     title: "Login || New HD Resseler Dashbord", // Updated title from source
@@ -16,7 +16,7 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en" suppressHydrationWarning>
-            <body className={montserrat.className}>{children}</body>
+            <body className="font-sans antialiased">{children}</body>
         </html>
     );
 }

@@ -1,14 +1,15 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 export async function PATCH(
-    request: Request,
-    { params }: { params: { id: string } }
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const userId = parseInt(params.id);
+        const { id } = await params;
+        const userId = parseInt(id);
         const body = await request.json();
         const { action } = body;
 
@@ -22,7 +23,7 @@ export async function PATCH(
 
             const updatedUser = await prisma.user.update({
                 where: { id: userId },
-                data: { disabled: !user.disabled },
+                data: { disabled: !(user as any).disabled } as any,
             });
             return NextResponse.json({ success: true, user: updatedUser });
         }
@@ -31,7 +32,6 @@ export async function PATCH(
             const { password } = body;
             if (!password) return NextResponse.json({ error: 'Password required' }, { status: 400 });
 
-            // In production, HASH THIS PASSWORD
             const updatedUser = await prisma.user.update({
                 where: { id: userId },
                 data: { password: password },
@@ -40,23 +40,37 @@ export async function PATCH(
         }
 
         if (action === 'add_balance') {
-            const { amount } = body;
+            const { amount, status } = body; // status: 1 = Payed, 0 = Not Payed
             if (amount === undefined || amount === null) return NextResponse.json({ error: 'Amount required' }, { status: 400 });
 
-            const updatedUser = await prisma.user.update({
-                where: { id: userId },
-                data: { balance: { increment: parseFloat(amount) } },
-            });
+            const amountFloat = parseFloat(amount);
+            const user = await prisma.user.findUnique({ where: { id: userId } });
+            if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+            let updatedUser = user;
+            const oldBalance = user.balance;
+
+            // If status is 1 (Payed), update balance immediately
+            const isPayed = String(status) === '1';
+
+            if (isPayed) {
+                updatedUser = await prisma.user.update({
+                    where: { id: userId },
+                    data: { balance: { increment: amountFloat } },
+                });
+            }
 
             // Log operation
             await prisma.operation.create({
                 data: {
-                    type: 'ADD_BALANCE', // Or generic 'ADMIN_OP'
-                    details: `Added ${amount} to balance`,
-                    status: 'SUCCESS',
+                    type: 'ADD_BALANCE',
+                    details: `Added ${amountFloat} to balance (Status: ${isPayed ? 'Payed' : 'Not Payed'})`,
+                    status: isPayed ? 'SUCCESS' : 'PENDING',
                     userId: userId,
-                    cost: parseFloat(amount)
-                }
+                    cost: 0,
+                    amount: amountFloat,
+                    oldBalance: oldBalance,
+                } as any
             });
 
             return NextResponse.json({ success: true, user: updatedUser });

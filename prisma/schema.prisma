@@ -30,7 +30,9 @@ model Operation {
   type        String   // CHECK, RENEW, BUY
   details     String
   status      String   // SUCCESS, FAILED, PENDING
-  cost        Float    @default(0.0)
+  cost        Float    @default(0.0) // This likely tracked cost for other ops, keeping it.
+  amount      Float    @default(0.0) // Added for ADD_BALANCE
+  oldBalance  Float    @default(0.0) // Added for history tracking
   createdAt   DateTime @default(now())
   userId      Int
   user        User     @relation(fields: [userId], references: [id])
