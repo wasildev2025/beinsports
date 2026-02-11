@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Montserrat } from "next/font/google"; // Changed from Inter
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+const montserrat = Montserrat({ subsets: ["latin"] }); // Changed from Inter
 
 export const metadata: Metadata = {
-    title: "NewHD Reseller Panel",
-    description: "Reseller control panel",
+    title: "Login || New HD Resseler Dashbord", // Updated title from source
+    description: "New HD Reseller control panel",
 };
 
 export default function RootLayout({
@@ -16,7 +16,7 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en" suppressHydrationWarning>
-            <body className={inter.className}>{children}</body>
+            <body className={montserrat.className}>{children}</body>
         </html>
     );
 }

@@ -1,122 +1,161 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CreditCard, CheckCircle, RefreshCw, ShoppingCart, DollarSign } from "lucide-react";
-
-interface DashboardData {
-  balance: string;
-  operations: {
-    check: number;
-    renew: number;
-    buy: number;
-    sold_orders: string;
-  };
-  notifications: any[];
-}
+import { PieChart, RefreshCw, ShoppingCart, DollarSign, Clock, AlertTriangle } from "lucide-react";
+import Link from "next/link";
+import { useState, useEffect } from "react";
 
 export default function DashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<any>({ CheckData: 0, RenewData: 0, BuyData: 0, sold: 0 });
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch('/api/dashboard/stats')
-      .then(async (res) => {
-        if (res.status === 401) {
-          window.location.href = "/"; // Redirect to login
-          return;
-        }
-        if (!res.ok) throw new Error("Failed to fetch");
-        return res.json();
-      })
+    // Fetch Stats
+    fetch('/api/dashboard/profile')
+      .then(res => res.json())
       .then(data => {
-        if (data) {
-          setData(data);
-          setLoading(false);
-        }
+        if (data && data.length > 0) setStats(data[0]);
       })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+      .catch(err => console.error(err));
+
+    // Fetch Notifications
+    fetch('/api/dashboard/notifications')
+      .then(res => res.json())
+      .then(data => setNotifications(data))
+      .catch(err => console.error(err));
   }, []);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <div className="text-red-500 font-medium">Session expired or connection failed.</div>
-        <button
-          onClick={() => window.location.href = "/"}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Return to Login
-        </button>
-      </div>
-    );
-  }
-
-  // Safety check for operations
-  const operations = data.operations || { check: 0, renew: 0, buy: 0, sold_orders: "0.00 $" };
-
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-800">Welcome Back, Ajmal KSA</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Balance" value={data.balance} icon={<DollarSign className="text-green-600" size={32} />} color="bg-green-100" />
-        <StatCard title="Operations Check" value={operations.check.toString()} icon={<CheckCircle className="text-blue-600" size={32} />} color="bg-blue-100" />
-        <StatCard title="Operations Renew" value={operations.renew.toString()} icon={<RefreshCw className="text-orange-600" size={32} />} color="bg-orange-100" />
-        <StatCard title="Sold Orders" value={operations.sold_orders} icon={<ShoppingCart className="text-purple-600" size={32} />} color="bg-purple-100" />
+      {/* Stats Cards Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+
+        <StatsCard
+          title="Operations Check"
+          category="Check"
+          value={stats.CheckData}
+          icon={<PieChart size={24} className="text-orange-400" />}
+          footerIcon={<RefreshCw size={14} />}
+          footerText="Check Now"
+          footerLink="/dashboard/check"
+        />
+
+        <StatsCard
+          title="Operations Renew"
+          category="Renew"
+          value={stats.RenewData}
+          icon={<RefreshCw size={24} className="text-green-500" />}
+          footerIcon={<Clock size={14} />}
+          footerText="Renew Now"
+          footerLink="/dashboard/renew"
+        />
+
+        <StatsCard
+          title="Operations Buy"
+          category="Buy"
+          value={stats.BuyData}
+          icon={<ShoppingCart size={24} className="text-blue-400" />}
+          footerIcon={<AlertTriangle size={14} />}
+          footerText="Buy Now"
+          footerLink="/dashboard/buy"
+        />
+
+        <StatsCard
+          title="Sold"
+          category="Sold"
+          value={Number(stats.sold).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          icon={<DollarSign size={24} className="text-green-600" />}
+          footerIcon={<RefreshCw size={14} />}
+          footerText="Update Now"
+          footerLink="#"
+        />
       </div>
 
-      {/* Notifications / Recent Activity */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Latest News & Updates</h3>
-        <div className="space-y-4">
-          {data.notifications.map((notif: any) => (
-            <NotificationItem
-              key={notif.id}
-              date={notif.date}
-              title={notif.title}
-              description={notif.description}
-            />
-          ))}
+      {/* Notifications Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-[#9368E9] p-4">
+          <h4 className="text-white text-lg font-normal">Notifications</h4>
+          <p className="text-white/80 text-sm font-light">Liste de gestion des Notifications</p>
+        </div>
+
+        <div className="p-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="text-xs text-gray-400 uppercase border-b border-gray-100">
+                  <th className="py-2 px-4 font-semibold">logo</th>
+                  <th className="py-2 px-4 font-semibold">Notification</th>
+                  <th className="py-2 px-4 font-semibold">Date</th>
+                  <th className="py-2 px-4"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {notifications.length > 0 ? (
+                  notifications.map((notif: any) => (
+                    <tr key={notif.id} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <div className="w-8 h-8 relative">
+                          <img src="/img/apple-icon.png" alt="Icon" className="w-full h-full object-contain" />
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-700">{notif.notification}</td>
+                      <td className="py-3 px-4 text-xs text-gray-500 whitespace-nowrap">{notif.created_date}</td>
+                      <td className="py-3 px-4">
+                        {/* Action buttons could go here */}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-sm text-gray-500">
+                      No notifications available
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
+
     </div>
   );
 }
 
-function StatCard({ title, value, icon, color }: { title: string; value: string; icon: any; color: string }) {
+function StatsCard({
+  title,
+  category,
+  value,
+  icon,
+  footerIcon,
+  footerText,
+  footerLink
+}: {
+  title: string;
+  category: string;
+  value: React.ReactNode;
+  icon: any;
+  footerIcon: any;
+  footerText: string;
+  footerLink: string;
+}) {
   return (
-    <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow flex items-center space-x-4">
-      <div className={`p-3 rounded-full ${color}`}>
-        {icon}
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+      <div className="flex justify-between items-start mb-4">
+        <div className="p-3 rounded-md bg-opacity-10">
+          {icon}
+        </div>
+        <div className="text-right">
+          <p className="text-sm text-gray-500 mb-1">{category}</p>
+          <h3 className="text-2xl font-bold text-gray-800">{value}</h3>
+        </div>
       </div>
-      <div>
-        <p className="text-sm text-gray-500 font-medium">{title}</p>
-        <p className="text-2xl font-bold text-gray-900">{value}</p>
+      <div className="border-t border-gray-100 pt-3">
+        <Link href={footerLink} className="flex items-center text-gray-500 hover:text-gray-700 text-sm transition-colors">
+          <span className="mr-2">{footerIcon}</span>
+          {footerText}
+        </Link>
       </div>
-    </div>
-  );
-}
-
-function NotificationItem({ date, title, description }: { date: string; title: string; description: string }) {
-  return (
-    <div className="border-l-4 border-blue-500 pl-4 py-2 bg-gray-50 rounded-r-md">
-      <div className="flex justify-between items-start">
-        <h4 className="font-bold text-gray-800">{title}</h4>
-        <span className="text-xs text-gray-500">{date}</span>
-      </div>
-      <p className="text-sm text-gray-600 mt-1">{description}</p>
     </div>
   );
 }

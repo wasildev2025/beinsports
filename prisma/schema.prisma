@@ -15,11 +15,14 @@ model User {
   username  String   @unique
   password  String
   email     String?
+  fullname  String?  // Added for dashboard display
   balance   Float    @default(0.0)
+  disabled  Boolean  @default(false) // Added for user management (enable/disable)
   role      String   @default("user") // admin, reseller, user
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   operations Operation[]
+  notifications Notification[] // Relation to notifications
 }
 
 model Operation {
@@ -31,4 +34,12 @@ model Operation {
   createdAt   DateTime @default(now())
   userId      Int
   user        User     @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id          Int      @id @default(autoincrement())
+  text        String
+  createdAt   DateTime @default(now())
+  userId      Int?     // Optional: if null, it's a global notification
+  user        User?    @relation(fields: [userId], references: [id])
 }

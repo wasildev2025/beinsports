@@ -1,257 +1,285 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { UserPlus, Edit, Trash, DollarSign } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { Search, Plus, Key, Ban, Check, DollarSign, X, Loader2 } from "lucide-react";
 
 interface User {
     id: number;
-    username: string;
+    fullname: string;
     email: string;
     role: string;
     balance: number;
+    disabled: boolean;
+    username: string;
 }
 
-export default function UsersPage() {
+export default function UsersManagementPage() {
     const [users, setUsers] = useState<User[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [isAddOpen, setIsAddOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState("");
+
+    // Modal State
+    const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [modalType, setModalType] = useState<'password' | 'balance' | null>(null);
 
     // Form State
-    const [formData, setFormData] = useState({
-        username: '',
-        password: '',
-        email: '',
-        role: 'user',
-        balance: '0'
-    });
+    const [newPassword, setNewPassword] = useState("");
+    const [addAmount, setAddAmount] = useState<number>(0);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
     useEffect(() => {
         fetchUsers();
     }, []);
 
-    const fetchUsers = () => {
-        fetch('/api/dashboard/users')
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) setUsers(data);
-                setLoading(false);
-            })
-            .catch(err => setLoading(false));
+    const fetchUsers = async () => {
+        setIsLoading(true);
+        try {
+            const res = await fetch('/api/dashboard/users');
+            if (res.ok) {
+                const data = await res.json();
+                setUsers(data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch users", error);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleAction = async (userId: number, action: string, payload: any = {}) => {
+        setIsSubmitting(true);
+        setMessage(null);
         try {
-            const res = await fetch('/api/dashboard/users', {
-                method: 'POST',
+            const res = await fetch(`/api/dashboard/users/${userId}`, {
+                method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify({ action, ...payload }),
             });
+
+            const data = await res.json();
+
             if (res.ok) {
-                setIsAddOpen(false);
-                setFormData({ username: '', password: '', email: '', role: 'user', balance: '0' });
-                fetchUsers();
+                setMessage({ text: "Operation successful", type: 'success' });
+                fetchUsers(); // Refresh list
+                closeModal();
             } else {
-                alert('Failed to create user');
+                setMessage({ text: data.error || "Operation failed", type: 'error' });
             }
         } catch (error) {
-            console.error(error);
+            setMessage({ text: "An error occurred", type: 'error' });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
-    const [editUser, setEditUser] = useState<User | null>(null);
-    const [editBalance, setEditBalance] = useState('');
-
-    const handleDelete = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this user?')) return;
-
-        try {
-            const res = await fetch(`/api/dashboard/users/${id}`, {
-                method: 'DELETE'
-            });
-            if (res.ok) {
-                fetchUsers();
-            } else {
-                alert('Failed to delete user');
-            }
-        } catch (error) {
-            console.error(error);
-            alert('Error deleting user');
-        }
+    const openModal = (user: User, type: 'password' | 'balance') => {
+        setSelectedUser(user);
+        setModalType(type);
+        setNewPassword("");
+        setAddAmount(0);
+        setMessage(null);
     };
 
-    const handleUpdateBalance = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!editUser) return;
-
-        try {
-            const res = await fetch(`/api/dashboard/users/${editUser.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ balance: editBalance })
-            });
-
-            if (res.ok) {
-                setEditUser(null);
-                setEditBalance('');
-                fetchUsers();
-            } else {
-                alert('Failed to update balance');
-            }
-        } catch (error) {
-            console.error(error);
-        }
+    const closeModal = () => {
+        setSelectedUser(null);
+        setModalType(null);
     };
+
+    const generatePassword = () => {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        let generated = "";
+        for (let i = 0; i < 10; i++) {
+            generated += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        setNewPassword(generated);
+    };
+
+    const filteredUsers = users.filter(user =>
+        user.fullname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.username?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-gray-800">User Management</h1>
-                <button
-                    onClick={() => setIsAddOpen(true)}
-                    className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-                >
-                    <UserPlus size={20} />
-                    <span>Add User</span>
-                </button>
-            </div>
-
-            {/* User List */}
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Balance</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {users.map(user => (
-                            <tr key={user.id}>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="font-medium text-gray-900">{user.username}</div>
-                                    <div className="text-sm text-gray-500">{user.email}</div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>
-                                        {user.role}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    ${user.balance.toFixed(2)}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                    <button
-                                        onClick={() => {
-                                            setEditUser(user);
-                                            setEditBalance(user.balance.toString());
-                                        }}
-                                        className="text-blue-600 hover:text-blue-900"
-                                    >
-                                        <Edit size={18} />
-                                    </button>
-                                    <button onClick={() => handleDelete(user.id)} className="text-red-600 hover:text-red-900"><Trash size={18} /></button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* Edit Balance Modal */}
-            {editUser && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg p-6 max-w-sm w-full">
-                        <h2 className="text-lg font-bold mb-4">Update Balance: {editUser.username}</h2>
-                        <form onSubmit={handleUpdateBalance} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">New Balance</label>
-                                <div className="relative mt-1">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <DollarSign className="h-4 w-4 text-gray-400" />
-                                    </div>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        className="block w-full border border-gray-300 rounded-md pl-10 p-2"
-                                        value={editBalance}
-                                        onChange={e => setEditBalance(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex justify-end space-x-3 mt-6">
-                                <button
-                                    type="button"
-                                    onClick={() => setEditUser(null)}
-                                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                                >
-                                    Update
-                                </button>
-                            </div>
-                        </form>
+        <div className="space-y-6 relative">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-[#9368E9] p-4 flex justify-between items-center">
+                    <div>
+                        <h4 className="text-white text-lg font-normal">Users</h4>
+                        <p className="text-white/80 text-sm font-light">Panneau de gestion des utilisateurs</p>
+                    </div>
+                    <div className="bg-white/20 p-2 rounded-md flex items-center">
+                        <Search size={18} className="text-white mr-2" />
+                        <input
+                            type="text"
+                            placeholder="Search..."
+                            className="bg-transparent border-none text-white placeholder-white/70 focus:outline-none text-sm"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
                     </div>
                 </div>
-            )}
 
-            {/* Add User Modal */}
-            {isAddOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg p-6 max-w-md w-full">
-                        <h2 className="text-xl font-bold mb-4">Add New User</h2>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Username</label>
-                                <input
-                                    type="text"
-                                    required
-                                    className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                                    value={formData.username}
-                                    onChange={e => setFormData({ ...formData, username: e.target.value })}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Password</label>
-                                <input
-                                    type="password"
-                                    required
-                                    className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                                    value={formData.password}
-                                    onChange={e => setFormData({ ...formData, password: e.target.value })}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Initial Balance</label>
-                                <input
-                                    type="number"
-                                    className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                                    value={formData.balance}
-                                    onChange={e => setFormData({ ...formData, balance: e.target.value })}
-                                />
-                            </div>
-                            <div className="flex justify-end space-x-3 mt-6">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsAddOpen(false)}
-                                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                                >
-                                    Create User
-                                </button>
-                            </div>
-                        </form>
+                <div className="p-4">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="text-xs text-gray-400 uppercase border-b border-gray-100">
+                                    <th className="py-2 px-4 font-semibold">ID app</th>
+                                    <th className="py-2 px-4 font-semibold">Fullname</th>
+                                    <th className="py-2 px-4 font-semibold">email</th>
+                                    <th className="py-2 px-4 font-semibold">type</th>
+                                    <th className="py-2 px-4 font-semibold">Sold</th>
+                                    <th className="py-2 px-4 font-semibold">Add Sold</th>
+                                    <th className="py-2 px-4 font-semibold">Password</th>
+                                    <th className="py-2 px-4 font-semibold">Operation</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {isLoading ? (
+                                    <tr><td colSpan={8} className="py-8 text-center text-gray-500">Loading...</td></tr>
+                                ) : filteredUsers.length > 0 ? (
+                                    filteredUsers.map((user) => (
+                                        <tr key={user.id} className="border-b border-gray-50 hover:bg-gray-50">
+                                            <td className="py-3 px-4">
+                                                <div className="w-8 h-8 relative">
+                                                    <img src="/img/apple-icon.png" alt="Icon" className="w-full h-full object-contain" />
+                                                </div>
+                                            </td>
+                                            <td className="py-3 px-4 text-sm text-gray-700">{user.fullname || user.username}</td>
+                                            <td className="py-3 px-4 text-sm text-gray-500">{user.email}</td>
+                                            <td className="py-3 px-4 text-sm text-gray-500 capitalize">{user.role}</td>
+                                            <td className="py-3 px-4 text-sm font-medium text-gray-700">
+                                                {user.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="py-3 px-4">
+                                                <button
+                                                    onClick={() => openModal(user, 'balance')}
+                                                    className="bg-[#1DC7EA] text-white px-3 py-1 rounded text-xs hover:bg-[#1DC7EA]/90 transition-colors flex items-center"
+                                                >
+                                                    <Plus size={12} className="mr-1" /> Add Sold
+                                                </button>
+                                            </td>
+                                            <td className="py-3 px-4">
+                                                <button
+                                                    onClick={() => openModal(user, 'password')}
+                                                    className="bg-[#3472F7] text-white px-3 py-1 rounded text-xs hover:bg-[#3472F7]/90 transition-colors flex items-center"
+                                                >
+                                                    <Key size={12} className="mr-1" /> Password
+                                                </button>
+                                            </td>
+                                            <td className="py-3 px-4">
+                                                <button
+                                                    onClick={() => {
+                                                        if (confirm(`Are you sure you want to ${user.disabled ? 'enable' : 'disable'} this user?`)) {
+                                                            handleAction(user.id, 'toggle_status');
+                                                        }
+                                                    }}
+                                                    className={`${user.disabled ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-white px-3 py-1 rounded text-xs transition-colors flex items-center w-full justify-center`}
+                                                >
+                                                    {user.disabled ? (
+                                                        <><Check size={12} className="mr-1" /> Enable</>
+                                                    ) : (
+                                                        <><Ban size={12} className="mr-1" /> Disable</>
+                                                    )}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr><td colSpan={8} className="py-8 text-center text-gray-500">No users found</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {/* Modals Overlay */}
+            {selectedUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden transform transition-all">
+                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                            <h5 className="font-semibold text-gray-800">
+                                {modalType === 'password' ? 'Update Password' : 'Add Sold'} : {selectedUser.fullname}
+                            </h5>
+                            <button onClick={closeModal} className="text-gray-400 hover:text-gray-600">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6">
+                            {message && (
+                                <div className={`mb-4 p-3 rounded text-sm ${message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                    {message.text}
+                                </div>
+                            )}
+
+                            {modalType === 'password' && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                                        <div className="flex">
+                                            <button
+                                                onClick={generatePassword}
+                                                className="bg-primary text-white px-3 py-2 rounded-l-md bg-blue-500 hover:bg-blue-600 text-sm"
+                                            >Generate</button>
+                                            <input
+                                                type="text"
+                                                value={newPassword}
+                                                onChange={(e) => setNewPassword(e.target.value)}
+                                                className="flex-1 border border-gray-300 rounded-r-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                placeholder="Enter password"
+                                            />
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            if (confirm("Do you want to submit?")) {
+                                                handleAction(selectedUser.id, 'update_password', { password: newPassword });
+                                            }
+                                        }}
+                                        disabled={isSubmitting}
+                                        className="w-full bg-[#9368E9] text-white py-2 rounded-md hover:bg-[#7a52cc] transition-colors flex justify-center items-center"
+                                    >
+                                        {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : "Update Password"}
+                                    </button>
+                                </div>
+                            )}
+
+                            {modalType === 'balance' && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Amount to Add</label>
+                                        <div className="relative">
+                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                <DollarSign size={16} className="text-gray-400" />
+                                            </div>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={addAmount}
+                                                onChange={(e) => setAddAmount(parseFloat(e.target.value))}
+                                                className="w-full border border-gray-300 rounded-md pl-10 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            if (confirm("Do you want to submit?")) {
+                                                handleAction(selectedUser.id, 'add_balance', { amount: addAmount });
+                                            }
+                                        }}
+                                        disabled={isSubmitting}
+                                        className="w-full bg-[#9368E9] text-white py-2 rounded-md hover:bg-[#7a52cc] transition-colors flex justify-center items-center"
+                                    >
+                                        {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : "Add Balance"}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
