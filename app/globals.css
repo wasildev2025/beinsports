@@ -8,7 +8,7 @@
 }
 
 body {
-  color: white;
+  color: #0f172a; /* text-slate-900 */
   background: linear-gradient(135deg, #2e0249 0%, #570a8d 50%, #1a0b2e 100%);
   min-height: 100vh;
 }

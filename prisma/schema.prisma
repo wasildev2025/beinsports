@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,65 +8,66 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
-  password  String
-  email     String?
-  fullname  String?  // Added for dashboard display
-  balance   Float    @default(0.0)
-  disabled  Boolean  @default(false) // Added for user management (enable/disable)
-  role      String   @default("user") // admin, reseller, user
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  operations Operation[]
-  notifications Notification[] // Relation to notifications
+  id            Int            @id @default(autoincrement())
+  username      String         @unique
+  password      String
+  email         String?
+  fullname      String?
+  balance       Float          @default(0.0)
+  disabled      Boolean        @default(false)
+  role          String         @default("user")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  notifications Notification[]
+  operations    Operation[]
 }
 
 model Operation {
-  id          Int      @id @default(autoincrement())
-  type        String   // CHECK, RENEW, BUY
-  details     String
-  status      String   // SUCCESS, FAILED, PENDING
-  cost        Float    @default(0.0) // This likely tracked cost for other ops, keeping it.
-  amount      Float    @default(0.0) // Added for ADD_BALANCE
-  oldBalance  Float    @default(0.0) // Added for history tracking
-  createdAt   DateTime @default(now())
-  userId      Int
-  user        User     @relation(fields: [userId], references: [id])
+  id         Int      @id @default(autoincrement())
+  type       String
+  details    String
+  status     String
+  cost       Float    @default(0.0)
+  amount     Float    @default(0.0)
+  oldBalance Float    @default(0.0)
+  createdAt  DateTime @default(now())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
 }
 
 model Notification {
-  id          Int      @id @default(autoincrement())
-  text        String
-  createdAt   DateTime @default(now())
-  userId      Int?     // Optional: if null, it's a global notification
-  user        User?    @relation(fields: [userId], references: [id])
+  id        Int      @id @default(autoincrement())
+  text      String
+  createdAt DateTime @default(now())
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id])
 }
+
 model SbsConfig {
-  id        Int      @id @default(1)
+  id        Int      @id @default(autoincrement())
   username  String   @default("")
   password  String   @default("")
-  secret    String   @default("") // This is likely the Session ID or Secret Token
-  promoCode String   @default("") // Added for Dealer Tokens / Promo Code page
+  secret    String   @default("")
+  promoCode String   @default("")
   updatedAt DateTime @updatedAt
 }
 
 model Code {
-  id          Int      @id @default(autoincrement())
-  code        String   @unique
-  type        String   // e.g., "1 Month", "3 Months", "Full Package"
-  isUsed      Boolean  @default(false)
-  usedById    Int?
-  usedAt      DateTime?
-  createdBy   String   @default("admin")
-  createdAt   DateTime @default(now())
+  id        Int       @id @default(autoincrement())
+  code      String    @unique
+  type      String
+  isUsed    Boolean   @default(false)
+  usedById  Int?
+  usedAt    DateTime?
+  createdBy String    @default("admin")
+  createdAt DateTime  @default(now())
 }
 
 model ConnectionLog {
-  id          Int      @id @default(autoincrement())
-  username    String
-  ip          String?
-  device      String?
-  status      String   // LOGIN, LOGOUT, FAILED
-  createdAt   DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  username  String
+  ip        String?
+  device    String?
+  status    String
+  createdAt DateTime @default(now())
 }
