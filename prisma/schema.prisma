@@ -45,3 +45,31 @@ model Notification {
   userId      Int?     // Optional: if null, it's a global notification
   user        User?    @relation(fields: [userId], references: [id])
 }
+model SbsConfig {
+  id        Int      @id @default(1)
+  username  String   @default("")
+  password  String   @default("")
+  secret    String   @default("") // This is likely the Session ID or Secret Token
+  promoCode String   @default("") // Added for Dealer Tokens / Promo Code page
+  updatedAt DateTime @updatedAt
+}
+
+model Code {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  type        String   // e.g., "1 Month", "3 Months", "Full Package"
+  isUsed      Boolean  @default(false)
+  usedById    Int?
+  usedAt      DateTime?
+  createdBy   String   @default("admin")
+  createdAt   DateTime @default(now())
+}
+
+model ConnectionLog {
+  id          Int      @id @default(autoincrement())
+  username    String
+  ip          String?
+  device      String?
+  status      String   // LOGIN, LOGOUT, FAILED
+  createdAt   DateTime @default(now())
+}

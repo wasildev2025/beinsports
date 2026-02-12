@@ -3,8 +3,10 @@ import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
   const session = request.cookies.get('session');
-  // Check if trying to access dashboard routes
-  if (request.nextUrl.pathname.startsWith('/dashboard')) {
+  const pathname = request.nextUrl.pathname;
+
+  // Check if trying to access dashboard or admin routes
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/admin')) {
     if (!session) {
       return NextResponse.redirect(new URL('/', request.url));
     }
@@ -13,5 +15,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*'],
+  matcher: ['/dashboard/:path*', '/admin/:path*'],
 };
